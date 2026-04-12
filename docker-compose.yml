@@ -1,0 +1,30 @@
+services:
+  order_db:
+    image: postgres:15-alpine
+    container_name: order_db
+    environment:
+      POSTGRES_USER: order_user
+      POSTGRES_PASSWORD: order_password
+      POSTGRES_DB: orders_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - order_data:/var/lib/postgresql/data
+      - ./order-service/migrations:/docker-entrypoint-initdb.d
+
+  payment_db:
+    image: postgres:15-alpine
+    container_name: payment_db
+    environment:
+      POSTGRES_USER: payment_user
+      POSTGRES_PASSWORD: payment_password
+      POSTGRES_DB: payments_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - payment_data:/var/lib/postgresql/data
+      - ./payment-service/migrations:/docker-entrypoint-initdb.d
+
+volumes:
+  order_data:
+  payment_data:
