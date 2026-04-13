@@ -20,12 +20,14 @@ func (e *ErrServiceUnavailable) Error() string {
 type orderUseCase struct {
 	repo          domain.OrderRepository
 	paymentClient domain.PaymentClient
+	broker        *OrderBroker
 }
 
-func NewOrderUseCase(repo domain.OrderRepository, paymentClient domain.PaymentClient) domain.OrderUseCase {
+func NewOrderUseCase(repo domain.OrderRepository, paymentClient domain.PaymentClient, broker *OrderBroker) domain.OrderUseCase {
 	return &orderUseCase{
 		repo:          repo,
 		paymentClient: paymentClient,
+		broker:        broker,
 	}
 }
 
@@ -55,20 +57,28 @@ func (u *orderUseCase) CreateOrder(ctx context.Context, customerID, itemName str
 		return nil, err
 	}
 
-	_, err := u.paymentClient.AuthorizePayment(ctx, order.ID, order.Amount)
-	if err != nil {
-		_ = u.repo.UpdateStatus(ctx, order.ID, "Failed")
-		order.Status = "Failed"
-		if isTimeoutOrUnavailable(err) {
-			return order, &ErrServiceUnavailable{Message: "Payment Service Unavailable"}
+	go func(orderID string, amount int64) {
+
+		bgCtx := context.Background()
+
+		time.Sleep(15 * time.Second) // pending status simulating
+
+		
+
+		_, err := u.paymentClient.AuthorizePayment(bgCtx, orderID, amount)
+		if err != nil {
+			_ = u.repo.UpdateStatus(bgCtx, orderID, "Payment Failed")
+			u.broker.Publish(orderID, "Payment Failed")
+			return
 		}
-		return order, err
-	}
 
-	_ = u.repo.UpdateStatus(ctx, order.ID, "Paid")
-	order.Status = "Paid"
+		_ = u.repo.UpdateStatus(bgCtx, orderID, "Paid")
+		u.broker.Publish(orderID, "Paid")
+	}(order.ID, order.Amount)
 
+	// to give while Penging
 	return order, nil
+
 }
 
 func (u *orderUseCase) GetOrder(ctx context.Context, id string) (*domain.Order, error) {
@@ -98,7 +108,12 @@ func (u *orderUseCase) CancelOrder(ctx context.Context, id string) error {
 		return errors.New("only Pending orders can be cancelled")
 	}
 
-	return u.repo.UpdateStatus(ctx, id, "Cancelled")
+	err = u.repo.UpdateStatus(ctx, id, "Cancelled")
+	if err == nil {
+		u.broker.Publish(id, "Cancelled")
+	}
+
+	return err
 }
 
 func isTimeoutOrUnavailable(err error) bool {
