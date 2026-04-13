@@ -15,19 +15,19 @@ type Config struct {
 
 func LoadConfig() *Config {
 	return &Config{
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBUser:     getEnv("DB_USER", "payment_user"),
-		DBPassword: getEnv("DB_PASSWORD", "payment_password"),
-		DBName:     getEnv("DB_NAME", "payments_db"),
-		DBPort:     getEnv("DB_PORT", "5433"),
-		ServerPort: getEnv("SERVER_PORT", "8081"),
+		DBHost:     getEnv("DB_HOST"),
+		DBUser:     getEnv("DB_USER"),
+		DBPassword: getEnv("DB_PASSWORD"),
+		DBName:     getEnv("DB_NAME"),
+		DBPort:     getEnv("DB_PORT"),
+		ServerPort: getEnv("SERVER_PORT"),
 	}
 }
 
-func getEnv(key, defaultValue string) string {
+func getEnv(key string) string {
 	value := os.Getenv(key)
 	if value == "" {
-		return defaultValue
+		panic("environment variable not set: " + key)
 	}
 	return value
 }
