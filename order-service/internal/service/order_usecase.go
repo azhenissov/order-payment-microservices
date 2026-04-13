@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"order-service/internal/domain"
 	"time"
 
@@ -63,9 +64,18 @@ func (u *orderUseCase) CreateOrder(ctx context.Context, customerID, itemName str
 
 		time.Sleep(15 * time.Second) // pending status simulating
 
-		
+		currentOrder, err := u.repo.GetByID(bgCtx, orderID)
+		if err != nil {
+			log.Printf("Error in checking order before payment %v", err)
+			return
+		}
 
-		_, err := u.paymentClient.AuthorizePayment(bgCtx, orderID, amount)
+		if currentOrder.Status == "Cancelled" {
+			log.Printf("Order %s is cancelled, skipping payment", orderID)
+			return
+		}
+
+		_, err = u.paymentClient.AuthorizePayment(bgCtx, orderID, amount)
 		if err != nil {
 			_ = u.repo.UpdateStatus(bgCtx, orderID, "Payment Failed")
 			u.broker.Publish(orderID, "Payment Failed")
