@@ -54,3 +54,35 @@ func (h *PaymentGRPCHandler) ProcessPayment(ctx context.Context, req *desc.Proce
 		TransactionId: payment.TransactionID,
 	}, nil
 }
+
+func (h *PaymentGRPCHandler) ListPayments(ctx context.Context, req *desc.ListPaymentsRequest) (*desc.ListPaymentsResponse, error) {
+	minAmount := req.GetMinAmount()
+	maxAmount := req.GetMaxAmount()
+	log.Printf("[gRPC Method] ListPayments: MinAmount=%d, MaxAmount=%d", minAmount, maxAmount)
+
+	//use case
+
+	payments, err := h.paymentUC.ListPayments(ctx, minAmount, maxAmount)
+	if err != nil {
+		log.Printf("[gRPC Error] ListPayments failed: %v", err)
+
+		if err.Error() == "Min cannot be less than Max " {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		return nil, status.Error(codes.Internal, "failed to list payments: "+err.Error())
+	}
+
+	var pbPayments []*desc.PaymentResponse
+	for _, p := range payments {
+		pbPayments = append(pbPayments, &desc.PaymentResponse{
+			Id:      p.ID,
+			OrderId: p.OrderID,
+			Amount:  p.Amount,
+			Status:  p.Status,
+		})
+	}
+
+	return &desc.ListPaymentsResponse{
+		Payments: pbPayments,
+	}, nil
+}

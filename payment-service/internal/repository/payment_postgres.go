@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"payment-service/internal/domain"
 )
 
@@ -40,4 +41,44 @@ func (r *postgresPaymentRepository) GetByOrderID(ctx context.Context, orderID st
 		return nil, err
 	}
 	return p, nil
+}
+
+func (r *postgresPaymentRepository) FindByAmountRange(ctx context.Context, min, max int64) ([]*domain.Payment, error) {
+	
+	query := `SELECT id, order_id, transaction_id, amount, status FROM payments WHERE 1=1`
+	var args []interface{}
+	argID := 1
+
+	// Динамически добавляем условия, если значения больше 0
+	if min > 0 {
+		query += fmt.Sprintf(" AND amount >= $%d", argID)
+		args = append(args, min)
+		argID++
+	}
+	if max > 0 {
+		query += fmt.Sprintf(" AND amount <= $%d", argID)
+		args = append(args, max)
+	}
+
+	// Выполнение запроса с использованием стандартной библиотеки sql
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []*domain.Payment
+	for rows.Next() {
+		p := &domain.Payment{}
+		if err := rows.Scan(&p.ID, &p.OrderID, &p.TransactionID, &p.Amount, &p.Status); err != nil {
+			return nil, err
+		}
+		payments = append(payments, p)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return payments, nil
 }

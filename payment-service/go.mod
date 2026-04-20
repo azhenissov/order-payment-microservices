@@ -3,7 +3,7 @@ module payment-service
 go 1.25.5
 
 require (
-	github.com/azhenissov/grpc-contracts-go v0.0.0-20260413103405-fc2a687439d6
+	github.com/azhenissov/grpc-contracts-go v0.0.0-20260417113641-f3776f8ca2b2
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9

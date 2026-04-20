@@ -16,10 +16,12 @@ type Payment struct {
 type PaymentRepository interface {
 	Store(ctx context.Context, p *Payment) error
 	GetByOrderID(ctx context.Context, orderID string) (*Payment, error)
+	FindByAmountRange(ctx context.Context, min, max int64) ([]*Payment, error)
 }
 
 // PaymentUseCase interface represents business logic.
 type PaymentUseCase interface {
 	ProcessPayment(ctx context.Context, orderID string, amount int64) (*Payment, error)
 	GetPaymentStatus(ctx context.Context, orderID string) (*Payment, error)
+	ListPayments(ctx context.Context, min, max int64) ([]*Payment, error)
 }

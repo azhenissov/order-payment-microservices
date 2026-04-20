@@ -52,3 +52,10 @@ func (u *paymentUseCase) GetPaymentStatus(ctx context.Context, orderID string) (
 	}
 	return payment, nil
 }
+
+func (uc *paymentUseCase) ListPayments(ctx context.Context, min, max int64) ([]*domain.Payment, error) {
+	if min > 0 && max > 0 && min > max {
+		return nil, errors.New("Min cannot be less than Max ")
+	}
+	return uc.repo.FindByAmountRange(ctx, min, max)
+}
