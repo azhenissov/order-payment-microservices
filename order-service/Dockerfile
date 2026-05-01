@@ -6,6 +6,11 @@ WORKDIR /app
 # Copy go mod and sum files
 COPY go.mod go.sum ./
 
+ENV GOPROXY=https://proxy.golang.org,direct
+
+RUN go mod download
+
+
 # Copy source code
 COPY . .
 
