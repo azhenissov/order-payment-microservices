@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 
 	"payment-service/internal/api"
 	"payment-service/internal/api/middleware"
@@ -44,10 +45,19 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := db.Ping(); err != nil {
-		log.Fatalf("Failed to ping database: %v", err)
+	maxRetries := 5
+	for i := 0; i < maxRetries; i++ {
+		err := db.Ping()
+		if err == nil {
+			log.Println("✓ Database connected successfully")
+			break
+		}
+		log.Printf("Failed to connect to database, retrying in 2 seconds... (%d/%d)", i+1, maxRetries)
+		if i == maxRetries-1 {
+			log.Fatalf("Could not connect to database after %d attempts: %v", maxRetries, err)
+		}
+		time.Sleep(2 * time.Second)
 	}
-	log.Println("✓ Database connected successfully")
 
 	// 2. Setup Clean Architecture Layers
 	paymentRepo := repository.NewPostgresPaymentRepository(db)
