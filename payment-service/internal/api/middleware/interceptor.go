@@ -26,18 +26,3 @@ func LoggingUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.Un
 	return resp, err
 }
 
-func LoggingStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	start := time.Now()
-
-	err := handler(srv, ss)
-
-	duration := time.Since(start)
-	log.Printf(
-		"[gRPC Stream] Method=%s | Duration=%dms | Error=%v",
-		info.FullMethod,
-		duration.Milliseconds(),
-		err,
-	)
-
-	return err
-}
