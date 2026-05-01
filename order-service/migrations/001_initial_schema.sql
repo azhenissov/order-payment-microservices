@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS orders (
     amount BIGINT NOT NULL,
     status VARCHAR(20) NOT NULL,
     created_at TIMESTAMP NOT NULL,
-    idempotency_key VARCHAR(100)
+    idempotency_key VARCHAR(100),
+    transaction_id VARCHAR(100)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_idempotency_key ON orders(idempotency_key) WHERE idempotency_key IS NOT NULL AND idempotency_key != '';
