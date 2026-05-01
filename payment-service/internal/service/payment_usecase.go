@@ -2,18 +2,33 @@ package service
 
 import (
 	"context"
+	"encoding/json" // Добавили для маршалинга
 	"errors"
+	"log" // Добавили для логирования ошибок отправки
 	"payment-service/internal/domain"
 
 	"github.com/google/uuid"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type paymentUseCase struct {
-	repo domain.PaymentRepository
+	repo     domain.PaymentRepository
+	rabbitCh *amqp.Channel 
 }
 
-func NewPaymentUseCase(repo domain.PaymentRepository) domain.PaymentUseCase {
-	return &paymentUseCase{repo: repo}
+type OrderEvent struct {
+	OrderID       string  `json:"order_id"`
+	Amount        float64 `json:"amount"`
+	CustomerEmail string  `json:"customer_email"`
+	Status        string  `json:"status"`
+}
+
+//  Обновили конструктор, чтобы принимать rabbitCh
+func NewPaymentUseCase(repo domain.PaymentRepository, rabbitCh *amqp.Channel) domain.PaymentUseCase {
+	return &paymentUseCase{
+		repo:     repo,
+		rabbitCh: rabbitCh,
+	}
 }
 
 func (u *paymentUseCase) ProcessPayment(ctx context.Context, orderID string, amount int64) (*domain.Payment, error) {
@@ -22,7 +37,7 @@ func (u *paymentUseCase) ProcessPayment(ctx context.Context, orderID string, amo
 	}
 
 	status := "Authorized"
-	if amount > 100000 { // 1000 units (e.g. $1000) -> Declined
+	if amount > 100000 {
 		status = "Declined"
 	}
 
@@ -34,9 +49,38 @@ func (u *paymentUseCase) ProcessPayment(ctx context.Context, orderID string, amo
 		Status:        status,
 	}
 
+	// Сначала сохраняем в БД
 	err := u.repo.Store(ctx, payment)
 	if err != nil {
 		return nil, err
+	}
+
+	//  Отправляем событие в RabbitMQ после успешной записи в БД
+	event := OrderEvent{
+		OrderID:       payment.OrderID,
+		Amount:        float64(payment.Amount),
+		CustomerEmail: "customer@example.com", 
+		Status:        payment.Status,
+	}
+
+	body, err := json.Marshal(event)
+	if err == nil {
+		err = u.rabbitCh.PublishWithContext(ctx,
+			"",                  // exchange
+			"payment.completed", // routing key
+			false,
+			false,
+			amqp.Publishing{
+				ContentType:  "application/json",
+				DeliveryMode: amqp.Persistent, // Гарантия надежности
+				Body:         body,
+			})
+		if err != nil {
+			// Логируем ошибку, но не прерываем выполнение (платеж-то прошел)
+			log.Printf("Failed to publish payment event: %v", err)
+		} else {
+			log.Printf("Event published for OrderID: %s", payment.OrderID)
+		}
 	}
 
 	return payment, nil
