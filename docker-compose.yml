@@ -11,6 +11,11 @@ services:
     volumes:
       - order_data:/var/lib/postgresql/data
       - ./order-service/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U order_user -d orders_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   payment_db:
     image: postgres:15-alpine
@@ -24,42 +29,43 @@ services:
     volumes:
       - payment_data:/var/lib/postgresql/data
       - ./payment-service/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment_user -d payments_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # MIGRATION: Payment Service теперь работает на gRPC (вместо REST)
   payment-service:
     build:
       context: ./payment-service
-      dockerfile: Dockerfile
     container_name: payment-service
     depends_on:
-      - payment_db
+      payment_db:
+        condition: service_healthy
+
     environment:
       PAYMENT_GRPC_PORT: :9090
       DATABASE_URL: "postgres://payment_user:payment_password@payment_db:5432/payments_db?sslmode=disable"
     ports:
-      - "9090:9090"  # gRPC Server (вместо 8081 REST)
-    volumes:
-      - ./payment-service:/app
+      - "9090:9090"
 
-  # MIGRATION: Order Service теперь работает с gRPC клиентом (вместо HTTP)
   order-service:
     build:
       context: ./order-service
-      dockerfile: Dockerfile
     container_name: order-service
     depends_on:
-      - order_db
-      - payment-service
+      order_db:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
     environment:
       ORDER_REST_PORT: :8080
       ORDER_GRPC_PORT: :9091
-      PAYMENT_GRPC_ADDRESS: payment-service:9090  # gRPC address (вместо HTTP)
+      PAYMENT_GRPC_ADDRESS: payment-service:9090
       DATABASE_URL: "postgres://order_user:order_password@order_db:5432/orders_db?sslmode=disable"
     ports:
-      - "8080:8080"  # REST API (для пользователей)
-      - "9091:9091"  # gRPC Server (для streaming)
-    volumes:
-      - ./order-service:/app
+      - "8080:8080"
+      - "9091:9091"
 
 volumes:
   order_data:
