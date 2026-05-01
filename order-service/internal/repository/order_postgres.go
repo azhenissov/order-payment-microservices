@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"order-service/internal/domain"
+	"time"
 )
 
 type postgresOrderRepository struct {
@@ -67,4 +68,16 @@ func (r *postgresOrderRepository) GetRevenueByCustomerID(ctx context.Context, cu
 		TotalAmount: totalAmount,
 		OrdersCount: count,
 	}, nil
-}//
+}
+
+func (r *postgresOrderRepository) CreateOrder(ctx context.Context, id string, customerID string, itemName string, amount int64, status string) error {
+	query := `INSERT INTO orders (id, customer_id, item_name, amount, status, created_at) VALUES ($1, $2, $3, $4, $5, $6)`
+	_, err := r.db.ExecContext(ctx, query, id, customerID, itemName, amount, status, time.Now())
+	return err
+}
+
+func (r *postgresOrderRepository) UpdateOrderPaid(ctx context.Context, id string, status string, transactionID string) error {
+	query := `UPDATE orders SET status = $1, transaction_id = $2 WHERE id = $3`
+	_, err := r.db.ExecContext(ctx, query, status, transactionID, id)
+	return err
+}

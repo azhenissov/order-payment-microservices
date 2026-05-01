@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt" // Добавлено для fmt.Errorf
 	"log"
-	"order-service/internal/domain"
 	"time"
+
+	"order-service/internal/domain"
 
 	"github.com/google/uuid"
 )
@@ -32,6 +34,7 @@ func NewOrderUseCase(repo domain.OrderRepository, paymentClient domain.PaymentCl
 	}
 }
 
+// CreateOrder — создает заказ и запускает фоновую обработку
 func (u *orderUseCase) CreateOrder(ctx context.Context, customerID, itemName string, amount int64, idempotencyKey string) (*domain.Order, error) {
 	if idempotencyKey != "" {
 		existingOrder, err := u.repo.GetByIdempotencyKey(ctx, idempotencyKey)
@@ -58,6 +61,7 @@ func (u *orderUseCase) CreateOrder(ctx context.Context, customerID, itemName str
 		return nil, err
 	}
 
+	// Асинхронная логика
 	go func(orderID string, amount int64) {
 
 		bgCtx := context.Background()
@@ -86,9 +90,41 @@ func (u *orderUseCase) CreateOrder(ctx context.Context, customerID, itemName str
 		u.broker.Publish(orderID, "Paid")
 	}(order.ID, order.Amount)
 
-	// to give while Penging
 	return order, nil
+}
 
+// Checkout — синхронная оплата (как мы договаривались)
+func (u *orderUseCase) Checkout(ctx context.Context, orderID string, customerID string, itemName string, amount int64) error {
+	// Проверяем, что заказ с этим ID не существует
+	existingOrder, err := u.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return fmt.Errorf("failed to check existing order: %w", err)
+	}
+	if existingOrder != nil {
+		return fmt.Errorf("order with ID %s already exists", orderID)
+	}
+
+	err = u.repo.CreateOrder(ctx, orderID, customerID, itemName, amount, "PENDING")
+	if err != nil {
+		return fmt.Errorf("failed to create order: %w", err)
+	}
+
+	transactionID, err := u.paymentClient.AuthorizePayment(ctx, orderID, amount)
+	if err != nil {
+		log.Printf("Payment failed for order %s: %v", orderID, err)
+		_ = u.repo.UpdateStatus(ctx, orderID, "FAILED")
+		return fmt.Errorf("payment authorization failed: %w", err)
+	}
+
+	// Предположим, у тебя есть метод UpdateOrderPaid или UpdateStatus
+	err = u.repo.UpdateOrderPaid(ctx, orderID, "Paid", transactionID)
+	if err != nil {
+		log.Printf("Failed to update status to PAID for order %s: %v", orderID, err)
+		return err
+	}
+
+	log.Printf("Order %s successfully processed and paid with TxID: %s", orderID, transactionID)
+	return nil
 }
 
 func (u *orderUseCase) GetOrder(ctx context.Context, id string) (*domain.Order, error) {
@@ -124,10 +160,6 @@ func (u *orderUseCase) CancelOrder(ctx context.Context, id string) error {
 	}
 
 	return err
-}
-
-func isTimeoutOrUnavailable(err error) bool {
-	return err != nil && (err.Error() == "payment service unavailable" || len(err.Error()) > 27 && err.Error()[:27] == "payment service unavailable")
 }
 
 func (u *orderUseCase) GetRevenueByCustomerID(ctx context.Context, customerID string) (*domain.CustomerRevenue, error) {

@@ -26,7 +26,9 @@ type OrderRepository interface {
 	GetByID(ctx context.Context, id string) (*Order, error)
 	GetByIdempotencyKey(ctx context.Context, key string) (*Order, error)
 	UpdateStatus(ctx context.Context, id string, status string) error
+	UpdateOrderPaid(ctx context.Context, orderID string, status string, transactionID string) error
 	GetRevenueByCustomerID(ctx context.Context, customerID string) (*CustomerRevenue, error)
+	CreateOrder(ctx context.Context, orderID string, customerID string, itemName string, amount int64, status string) error
 }
 
 type PaymentClient interface {
@@ -35,6 +37,7 @@ type PaymentClient interface {
 
 type OrderUseCase interface {
 	CreateOrder(ctx context.Context, customerID, itemName string, amount int64, idempotencyKey string) (*Order, error)
+	Checkout(ctx context.Context, orderID string, customerID string, itemName string, amount int64) error
 	GetOrder(ctx context.Context, id string) (*Order, error)
 	CancelOrder(ctx context.Context, id string) error
 	GetRevenueByCustomerID(ctx context.Context, customerID string) (*CustomerRevenue, error)

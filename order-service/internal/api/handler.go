@@ -22,6 +22,7 @@ func NewOrderHandler(router *gin.Engine, uc domain.OrderUseCase) {
 	router.GET("/orders/revenue", handler.GetRevenue)
 	router.GET("/orders/:id", handler.GetOrder)
 	router.PATCH("/orders/:id/cancel", handler.CancelOrder)
+	router.POST("/orders/checkout", handler.Checkout)
 }
 
 type createOrderRequest struct {
@@ -90,4 +91,27 @@ func (h *OrderHandler) GetRevenue(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, revenue)
+}
+
+type checkoutRequest struct {
+	OrderID    string `json:"order_id" binding:"required"`
+	CustomerID string `json:"customer_id" binding:"required"`
+	ItemName   string `json:"item_name" binding:"required"`
+	Amount     int64  `json:"amount" binding:"required"`
+}
+
+func (h *OrderHandler) Checkout(c *gin.Context) {
+	var req checkoutRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.OrderUseCase.Checkout(c.Request.Context(), req.OrderID, req.CustomerID, req.ItemName, req.Amount)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "order checked out successfully"})
 }
