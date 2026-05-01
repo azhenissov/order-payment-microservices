@@ -16,6 +16,7 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"google.golang.org/grpc"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func main() {
@@ -59,9 +60,36 @@ func main() {
 		time.Sleep(2 * time.Second)
 	}
 
+	rabbitURL := os.Getenv("RABBITMQ_URL")
+	if rabbitURL == "" {
+		panic("RABBITMQ_URL is not in .env")
+	}
+
+	var rabbitConn *amqp.Connection
+	var rabbitCh *amqp.Channel
+
+	for i := 0; i < 5; i++ {
+		rabbitConn, err = amqp.Dial(rabbitURL)
+        if err == nil {
+            rabbitCh, err = rabbitConn.Channel()
+            if err == nil {
+                log.Println("✓ RabbitMQ connected successfully")
+                break
+            }
+        }
+        log.Printf("Failed to connect to RabbitMQ, retrying in 3s... (%d/5)", i+1)
+        time.Sleep(3 * time.Second)
+    }
+    if err != nil {
+        log.Fatalf("Could not connect to RabbitMQ after retries: %v", err)
+    }
+    defer rabbitConn.Close()
+    defer rabbitCh.Close()
+
 	// 2. Setup Clean Architecture Layers
 	paymentRepo := repository.NewPostgresPaymentRepository(db)
-	paymentUC := service.NewPaymentUseCase(paymentRepo)
+
+	paymentUC := service.NewPaymentUseCase(paymentRepo, rabbitCh) // Передаем rabbitCh в UseCase
 
 	// 3. Configure gRPC Server with Middleware (Interceptors)
 	port := os.Getenv("PAYMENT_GRPC_PORT")
